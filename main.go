@@ -15,6 +15,33 @@ import (
 	"github.com/kloudlite/container-registry-authorizer/env"
 )
 
+// getExpirationTime returns the time.Time object for the given expiration string
+func getExpirationTime(expiration string) (time.Time, error) {
+	now := time.Now()
+
+	if len(expiration) != 2 {
+		return now, fmt.Errorf("invalid expiration format, please use '1h', '1d', '1w', '1m', '1y'")
+	}
+
+	durationVal := expiration[0]  // '1' in '1h', '1d', '1w', '1m', '1y'
+	durationType := expiration[1] // 'h', 'd', 'w', 'm', 'y'
+
+	switch durationType {
+	case 'h':
+		return now.Add(time.Duration(durationVal-'0') * time.Hour), nil
+	case 'd':
+		return now.AddDate(0, 0, int(durationVal-'0')), nil
+	case 'w':
+		return now.AddDate(0, 0, int(durationVal-'0')*7), nil
+	case 'm':
+		return now.AddDate(0, int(durationVal-'0'), 0), nil
+	case 'y':
+		return now.AddDate(int(durationVal-'0'), 0, 0), nil
+	default:
+		return now, fmt.Errorf("invalid duration type: %v", durationType)
+	}
+}
+
 // nonce generates a random string of length size
 func nonce(size int) string {
 	chars := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -82,10 +109,10 @@ func startAdminServer(envs *env.Envs) error {
 	iApp := fiber.New()
 	iApp.Post(".secret/generate-token", func(c *fiber.Ctx) error {
 		type Body struct {
-			UserName    string    `json:"username"`
-			AccountName string    `json:"accountname"`
-			Access      string    `json:"access"`
-			Expiry      time.Time `json:"expiry"`
+			UserName    string `json:"username"`
+			AccountName string `json:"accountname"`
+			Access      string `json:"access"`
+			Expiration  string `json:"expiration"`
 		}
 
 		var body Body
@@ -93,7 +120,12 @@ func startAdminServer(envs *env.Envs) error {
 			return err
 		}
 
-		token := generateToken(body.UserName, body.AccountName, body.Access, body.Expiry)
+		expirationTime, err := getExpirationTime(body.Expiration)
+		if err != nil {
+			return err
+		}
+
+		token := generateToken(body.UserName, body.AccountName, body.Access, expirationTime)
 		return c.Send([]byte(token))
 	})
 
