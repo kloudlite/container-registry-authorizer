@@ -1,13 +1,1 @@
-# Ignore everything
-*
-
-# But not these files...
-!/.gitignore
-!/.gitattributes
-
-!*.go
-!go.sum
-!go.mod
-
-!README.md
-!LICENSE
+# nothing yet to ignore
