@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
 	"time"
@@ -98,7 +99,7 @@ func StartServer(envs *env.Envs) error {
 		return envs.AdminServerPort
 	}())
 
-	fmt.Println("Admin server starting on port: ", port)
+	log.Printf("Admin server starting on port: %s", port)
 	if err := iApp.Listen(port); err != nil {
 		return err
 	}

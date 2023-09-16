@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"log"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -50,38 +52,86 @@ func ParseAndVerifyToken(password string) (userName, accountName, access string,
 	return userName, accountName, access, nil
 }
 
-func StartServer(envs *env.Envs) error {
-	app := fiber.New()
+func FiberAuthHandler(c *fiber.Ctx) error {
+	accountname := c.Params("accountname", "nan")
+	b_auth := basicauth.New(basicauth.Config{
+		Realm: "Forbidden",
+		Authorizer: func(u string, p string) bool {
 
-	app.Use(":accountname/*", func(c *fiber.Ctx) error {
-		accountname := c.Params("accountname", "nan")
-		b_auth := basicauth.New(basicauth.Config{
-			Realm: "Forbidden",
-			Authorizer: func(u string, p string) bool {
+			userName, accountName, access, err := ParseAndVerifyToken(p)
+			if err != nil {
+				fmt.Println(err)
+				return false
+			}
 
-				userName, accountName, access, err := ParseAndVerifyToken(p)
-				if err != nil {
-					fmt.Println(err)
+			if (accountName == accountname) && (userName == u) {
+				if c.Method() != "GET" {
+					if access == "read-write" {
+						return true
+					}
 					return false
 				}
 
-				if (accountName == accountname) && (userName == u) {
-					if c.Method() != "GET" {
-						if access == "read-write" {
-							return true
-						}
-						return false
-					}
+				return true
+			}
 
-					return true
-				}
-
-				return false
-			},
-		})
-
-		return b_auth(c)
+			return false
+		},
 	})
+
+	return b_auth(c)
+}
+
+func unauthorized(w http.ResponseWriter) {
+	w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
+	http.Error(w, "Unauthorized", http.StatusUnauthorized)
+}
+
+func authorized(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+
+func HttpAuthHandler(accountname string) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		u, p, ok := r.BasicAuth()
+		if !ok {
+			unauthorized(w)
+			return
+		}
+
+		userName, accountName, access, err := ParseAndVerifyToken(p)
+		if err != nil {
+			fmt.Println(err)
+			unauthorized(w)
+			return
+		}
+
+		if (accountName == accountname) && (userName == u) {
+			if r.Method != "GET" {
+				if access == "read-write" {
+					authorized(w)
+					return
+				}
+				unauthorized(w)
+				return
+			}
+
+			authorized(w)
+			return
+		}
+
+		unauthorized(w)
+		return
+
+	})
+}
+
+func StartServer(envs *env.Envs) error {
+	app := fiber.New()
+
+	app.Use(":accountname/*", FiberAuthHandler)
 
 	app.Get(":accountname/*", func(c *fiber.Ctx) error {
 		return c.SendStatus(200)
@@ -98,7 +148,7 @@ func StartServer(envs *env.Envs) error {
 		return envs.AuthServerPort
 	}())
 
-	fmt.Println("Auth server starting on port: ", port)
+	log.Println("Auth server starting on port: ", port)
 	if err := app.Listen(port); err != nil {
 		return err
 	}
