@@ -77,7 +77,7 @@ jobs:
       with:
         name: ${{ env.GITHUB_REF_NAME }}
         tag: ${{ env.GITHUB_REF_NAME }}
-        artifacts: "src/main"
+        artifacts: "main"
         bodyFile: "body.log"
         token: ${{ secrets.GITHUB_TOKEN }}
 
