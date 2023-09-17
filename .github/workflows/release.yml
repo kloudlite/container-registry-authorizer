@@ -10,74 +10,27 @@ on:
     - 'r*'
 
 jobs:
-  build:
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
-
-
+  releases-matrix:
+    name: Release Go Binary
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # build and publish in parallel: linux/386, linux/amd64, linux/arm64, windows/386, windows/amd64, darwin/amd64, darwin/arm64
+        goos: [linux, windows, darwin]
+        goarch: ["386", amd64, arm64]
+        exclude:
+          - goarch: "386"
+            goos: darwin
+          - goarch: arm64
+            goos: windows
     steps:
-
-    # debug
-    - name: Dump env
-      run: env | sort
-    - name: Dump GitHub context
-      env:
-        GITHUB_CONTEXT: ${{ toJson(github) }}
-      run: echo "$GITHUB_CONTEXT"
-
     - uses: actions/checkout@v3
+    - uses: wangyoucao577/go-release-action@v1.30
       with:
-        fetch-depth: 0 # get all tags, needed to get git log
-        ref: main
-
-    # Go environment
-    - name: setup Go Lang
-      uses: actions/setup-go@v3
-      with:
-        go-version: '^1.21.1'
-    - run: |
-        go version
-        go mod tidy
-        go build  -o container-registry-authorizer -ldflags "-X main.Version=${GITHUB_REF_NAME} -X main.BuiltBy=github-actions" main.go
-
-    - run: git version
-    - run: git branch
-    - run: git tag
-
-    - name: get semantic tag version and release notes from commit messages
-      id: tag 
-      run: |
-        curtag=${GITHUB_REF_NAME}
-        major_minor=$(echo "$curtag" | cut -d'.' -f1-2)
-        patch=$(echo "$curtag" | cut -d'.' -f3)
-        # avoid empty patch number
-        [ -n "$patch" ] && ((patch--)) || patch=".x"
-        prevtag="${major_minor}.${patch}"
-
-        echo "" > body.log
-        if git tag | grep $prevtag ; then
-          git log -q ${curtag}...${prevtag} --pretty="- %s" -q --no-color >> body.log
-        else
-          git log --pretty="- %s" -q --no-color >> body.log
-        fi
-        line_count=$(cat body.log | wc -l)
-
-        echo "curtag=$curtag" >> $GITHUB_OUTPUT
-        echo "prevtag=$prevtag" >> $GITHUB_OUTPUT
-        echo "line_count=$line_count" >> $GITHUB_OUTPUT
-
-    - run: echo curtag is ${{ steps.tag.outputs.curtag }}
-    - run: echo prevtag is ${{ steps.tag.outputs.prevtag }}
-    - run: echo line_count is ${{ steps.tag.outputs.line_count }}
-    - run: cat body.log
-
-    #  create Github release with release note from file and binary asset attached
-    - uses: ncipollo/release-action@v1
-      with:
-        name: ${{ env.GITHUB_REF_NAME }}
-        tag: ${{ env.GITHUB_REF_NAME }}
-        artifacts: "container-registry-authorizer"
-        bodyFile: "body.log"
-        token: ${{ secrets.GITHUB_TOKEN }}
-
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        goos: ${{ matrix.goos }}
+        goarch: ${{ matrix.goarch }}
+        goversion: "https://dl.google.com/go/go1.21.1.linux-amd64.tar.gz"
+        project_path: "."
+        binary_name: "container-registry-authorizer"
+        extra_files: LICENSE README.md
