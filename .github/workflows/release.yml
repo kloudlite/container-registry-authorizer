@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    runs-on: golang:alpine3.18
+    runs-on: ubuntu-22.04
     permissions:
       contents: write
 
@@ -35,7 +35,7 @@ jobs:
     - name: setup Go Lang
       uses: actions/setup-go@v3
       with:
-        go-version: '^1.19.2'
+        go-version: '^1.21.1'
     - run: |
         go version
         cd src
