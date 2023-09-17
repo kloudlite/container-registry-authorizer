@@ -8,6 +8,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -15,27 +16,35 @@ import (
 )
 
 // getExpirationTime returns the time.Time object for the given expiration string
+
 func getExpirationTime(expiration string) (time.Time, error) {
 	now := time.Now()
 
-	if len(expiration) != 2 {
-		return now, fmt.Errorf("invalid expiration format, please use '1h', '1d', '1w', '1m', '1y'")
+	// Split the string into the numeric and duration type parts
+	length := len(expiration)
+	if length < 2 {
+		return now, fmt.Errorf("invalid expiration format")
 	}
 
-	durationVal := expiration[0]  // '1' in '1h', '1d', '1w', '1m', '1y'
-	durationType := expiration[1] // 'h', 'd', 'w', 'm', 'y'
+	durationValStr := expiration[:length-1]
+	durationVal, err := strconv.Atoi(durationValStr)
+	if err != nil {
+		return now, fmt.Errorf("invalid duration value: %v", err)
+	}
+
+	durationType := expiration[length-1]
 
 	switch durationType {
 	case 'h':
-		return now.Add(time.Duration(durationVal-'0') * time.Hour), nil
+		return now.Add(time.Duration(durationVal) * time.Hour), nil
 	case 'd':
-		return now.AddDate(0, 0, int(durationVal-'0')), nil
+		return now.AddDate(0, 0, durationVal), nil
 	case 'w':
-		return now.AddDate(0, 0, int(durationVal-'0')*7), nil
+		return now.AddDate(0, 0, durationVal*7), nil
 	case 'm':
-		return now.AddDate(0, int(durationVal-'0'), 0), nil
+		return now.AddDate(0, durationVal, 0), nil
 	case 'y':
-		return now.AddDate(int(durationVal-'0'), 0, 0), nil
+		return now.AddDate(durationVal, 0, 0), nil
 	default:
 		return now, fmt.Errorf("invalid duration type: %v", durationType)
 	}
