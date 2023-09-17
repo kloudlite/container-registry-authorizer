@@ -6,11 +6,6 @@ A simple and efficient container registry authorizer server written in Go.
 
 This project provides an easy way to authorize access to your container registry, ensuring secure and controlled access to your images.
 
-## Features
-
-- **No Database**: No database is required to run this server.
-- **Easy Setup**: The server can be easily set up and configured.
-
 ## Usage Guide
 
 You can run the server by providing the following environment variables:
