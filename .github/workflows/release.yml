@@ -39,7 +39,7 @@ jobs:
     - run: |
         go version
         go mod tidy
-        go build -ldflags "-X main.Version=${GITHUB_REF_NAME} -X main.BuiltBy=github-actions" main.go
+        go build  -o container-registry-authorizer -ldflags "-X main.Version=${GITHUB_REF_NAME} -X main.BuiltBy=github-actions" main.go
 
     - run: git version
     - run: git branch
@@ -77,7 +77,7 @@ jobs:
       with:
         name: ${{ env.GITHUB_REF_NAME }}
         tag: ${{ env.GITHUB_REF_NAME }}
-        artifacts: "main"
+        artifacts: "container-registry-authorizer"
         bodyFile: "body.log"
         token: ${{ secrets.GITHUB_TOKEN }}
 
