@@ -53,29 +53,54 @@ func ParseAndVerifyToken(password string) (userName, accountName, access string,
 }
 
 func FiberAuthHandler(c *fiber.Ctx) error {
-	accountname := c.Params("accountname", "nan")
+	log.Println("FiberAuthHandler: ", c.OriginalURL())
+	path := c.Query("path", "/")
+	method := c.Method("path", "GET")
+
 	b_auth := basicauth.New(basicauth.Config{
 		Realm: "Forbidden",
 		Authorizer: func(u string, p string) bool {
+			resp := func() bool {
 
-			userName, accountName, access, err := ParseAndVerifyToken(p)
-			if err != nil {
-				fmt.Println(err)
-				return false
-			}
-
-			if (accountName == accountname) && (userName == u) {
-				if c.Method() != "GET" {
-					if access == "read-write" {
-						return true
-					}
+				userName, accountName, access, err := ParseAndVerifyToken(p)
+				if err != nil {
+					fmt.Println(err)
 					return false
 				}
 
-				return true
-			}
+				pathArray := strings.Split(path, "/")
 
-			return false
+				if len(pathArray) <= 1 {
+					return true
+				}
+
+				if path == "/v2/" && method == "GET" && userName == u {
+					return true
+				}
+
+				if len(pathArray) <= 3 {
+					return false
+				}
+
+				accountname := pathArray[2]
+
+				if (accountName == accountname) && (userName == u) {
+					if method != "GET" {
+						if access == "read-write" {
+							return true
+						}
+						return false
+					}
+
+					return true
+				}
+
+				return false
+			}()
+
+			log.Println(method, ":", resp, u, path)
+
+			return resp
 		},
 	})
 
@@ -131,14 +156,9 @@ func HttpAuthHandler(accountname string) http.HandlerFunc {
 func StartServer(envs *env.Envs) error {
 	app := fiber.New()
 
-	app.Use(":accountname/*", FiberAuthHandler)
-
-	app.Get(":accountname/*", func(c *fiber.Ctx) error {
-		return c.SendStatus(200)
-	})
-
+	app.Use(FiberAuthHandler)
 	app.Get("/*", func(c *fiber.Ctx) error {
-		return c.SendStatus(400)
+		return c.SendStatus(200)
 	})
 
 	port := fmt.Sprintf(":%d", func() int {
