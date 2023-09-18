@@ -17,7 +17,7 @@ import (
 
 // getExpirationTime returns the time.Time object for the given expiration string
 
-func getExpirationTime(expiration string) (time.Time, error) {
+func GetExpirationTime(expiration string) (time.Time, error) {
 	now := time.Now()
 
 	// Split the string into the numeric and duration type parts
