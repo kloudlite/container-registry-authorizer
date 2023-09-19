@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,7 +17,7 @@ import (
 )
 
 // ParseAndVerifyToken parses the token and verifies it with the secret key and returns the username, accountname, access and error
-func ParseAndVerifyToken(password string) (userName, accountName, access string, err error) {
+func ParseAndVerifyToken(password string, secretKey string) (userName, accountName, access string, err error) {
 
 	tokenString, err := base64.StdEncoding.DecodeString(password)
 	if err != nil {
@@ -39,36 +39,33 @@ func ParseAndVerifyToken(password string) (userName, accountName, access string,
 		return "", "", "", fmt.Errorf("Token expired")
 	}
 
-	secretKey := os.Getenv("SECRET_KEY")
-
 	body := userName + "::" + accountName + "::" + access + "::" + expiryString + "::" + nonce
 	bodyWithSecret := body + "::" + secretKey
 	newToken := hex.EncodeToString(sha256.New().Sum([]byte(bodyWithSecret)))
 
 	if oldToken != newToken {
-		return "", "", "", fmt.Errorf("Invalid token")
+		return "", "", "", fmt.Errorf("Wrong token")
 	}
 
 	return userName, accountName, access, nil
 }
 
-func FiberAuthHandler(c *fiber.Ctx) error {
-	log.Println("FiberAuthHandler: ", c.OriginalURL())
+func FiberAuthHandler(c *fiber.Ctx, secretKey string) error {
 	path := c.Query("path", "/")
 	method := c.Method("path", "GET")
+
+	pathArray := strings.Split(path, "/")
 
 	b_auth := basicauth.New(basicauth.Config{
 		Realm: "Forbidden",
 		Authorizer: func(u string, p string) bool {
 			resp := func() bool {
 
-				userName, accountName, access, err := ParseAndVerifyToken(p)
+				userName, accountName, access, err := ParseAndVerifyToken(p, secretKey)
 				if err != nil {
 					fmt.Println(err)
 					return false
 				}
-
-				pathArray := strings.Split(path, "/")
 
 				if len(pathArray) <= 1 {
 					return true
@@ -80,6 +77,21 @@ func FiberAuthHandler(c *fiber.Ctx) error {
 
 				if len(pathArray) <= 3 {
 					return false
+				}
+
+				if len(pathArray) > 3 {
+					// Define regex pattern
+					pattern := `\/v2\/.*[^\/]\/.*\/(blobs.*|manifests.*)$`
+
+					// Compile the regex pattern
+					re, err := regexp.Compile(pattern)
+					if err != nil {
+						log.Println(err)
+					}
+
+					if !re.MatchString(path) {
+						return false
+					}
 				}
 
 				accountname := pathArray[2]
@@ -98,7 +110,9 @@ func FiberAuthHandler(c *fiber.Ctx) error {
 				return false
 			}()
 
-			log.Println(method, ":", resp, u, path)
+			if !resp {
+				log.Println(method, ":", resp, u, path)
+			}
 
 			return resp
 		},
@@ -117,7 +131,7 @@ func authorized(w http.ResponseWriter) {
 	w.Write([]byte("OK"))
 }
 
-func HttpAuthHandler(accountname string) http.HandlerFunc {
+func HttpAuthHandler(accountname string, secretKey string) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		u, p, ok := r.BasicAuth()
@@ -126,7 +140,7 @@ func HttpAuthHandler(accountname string) http.HandlerFunc {
 			return
 		}
 
-		userName, accountName, access, err := ParseAndVerifyToken(p)
+		userName, accountName, access, err := ParseAndVerifyToken(p, "")
 		if err != nil {
 			fmt.Println(err)
 			unauthorized(w)
@@ -156,7 +170,9 @@ func HttpAuthHandler(accountname string) http.HandlerFunc {
 func StartServer(envs *env.Envs) error {
 	app := fiber.New()
 
-	app.Use(FiberAuthHandler)
+	app.Use(func(c *fiber.Ctx) error {
+		return FiberAuthHandler(c, envs.SecretKey)
+	})
 	app.Get("/*", func(c *fiber.Ctx) error {
 		return c.SendStatus(200)
 	})
