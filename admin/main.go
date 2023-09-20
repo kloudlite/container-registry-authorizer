@@ -62,10 +62,10 @@ func nonce(size int) string {
 }
 
 // GenerateToken generates a token with the given username, accountname, access and expiry expiry string shoud be in RFC3339[ example: 2023-09-16T23:03:52+05:30 ] format
-func GenerateToken(userName, accountName, access string, expiry time.Time, secretKey string) string {
+func GenerateToken(userName, accountName, access string, expiry time.Time, secretKey string) (string, error) {
 
 	if access != "read" && access != "read_write" {
-		access = "read"
+		return "", fmt.Errorf("Invalid access type, access should be either read or read_write")
 	}
 
 	nonce := nonce(5)
@@ -77,7 +77,7 @@ func GenerateToken(userName, accountName, access string, expiry time.Time, secre
 
 	resp := base64.StdEncoding.EncodeToString([]byte(body + "::" + token))
 
-	return resp
+	return resp, nil
 }
 
 func StartServer(envs *env.Envs) error {
@@ -100,7 +100,11 @@ func StartServer(envs *env.Envs) error {
 			return err
 		}
 
-		token := GenerateToken(body.UserName, body.AccountName, body.Access, expirationTime, envs.SecretKey)
+		token, err := GenerateToken(body.UserName, body.AccountName, body.Access, expirationTime, envs.SecretKey)
+		if err != nil {
+			return err
+		}
+
 		return c.Send([]byte(token))
 	})
 
