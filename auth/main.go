@@ -60,7 +60,7 @@ func ParseAndVerifyToken(password string, secretKey string) (userName, accountNa
 	return userName, accountName, access, nil
 }
 
-func authorizer(u, p, path, method, secretKey string) error {
+func Authorizer(u, p, path, method, secretKey string) error {
 
 	pathArray := strings.Split(path, "/")
 
@@ -116,7 +116,7 @@ func FiberAuthHandler(c *fiber.Ctx, secretKey string) error {
 		Realm: "Forbidden",
 		Authorizer: func(u string, p string) bool {
 
-			if err := authorizer(u, p, path, method, secretKey); err != nil {
+			if err := Authorizer(u, p, path, method, secretKey); err != nil {
 				log.Println(err)
 				return false
 			}
@@ -140,7 +140,7 @@ func HttpAuthHandler(accountname string, secretKey string) http.HandlerFunc {
 		path := queryParams.Get("path")
 		method := queryParams.Get("method")
 
-		if err := authorizer(u, p, path, method, secretKey); err != nil {
+		if err := Authorizer(u, p, path, method, secretKey); err != nil {
 			log.Println(err)
 			unauthorized(w)
 			return
