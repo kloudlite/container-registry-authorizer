@@ -6,13 +6,6 @@ import (
 	"github.com/kloudlite/container-registry-authorizer/env"
 )
 
-type application struct {
-	auth struct {
-		username string
-		password string
-	}
-}
-
 func main() {
 	envs := env.GetEnvsOrDie()
 

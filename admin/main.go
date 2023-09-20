@@ -63,6 +63,11 @@ func nonce(size int) string {
 
 // GenerateToken generates a token with the given username, accountname, access and expiry expiry string shoud be in RFC3339[ example: 2023-09-16T23:03:52+05:30 ] format
 func GenerateToken(userName, accountName, access string, expiry time.Time, secretKey string) string {
+
+	if access != "read" && access != "read_write" {
+		access = "read"
+	}
+
 	nonce := nonce(5)
 	body := userName + "::" + accountName + "::" + access + "::" + expiry.Format(time.RFC3339) + "::" + nonce
 

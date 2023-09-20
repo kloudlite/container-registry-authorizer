@@ -26,7 +26,7 @@ func MuxAuthServer(envs *env.Envs) error {
 			return
 		}
 
-		auth.HttpAuthHandler(accountname)(w, r)
+		auth.HttpAuthHandler(accountname, envs.SecretKey)(w, r)
 	})
 
 	port := fmt.Sprintf(":%d", func() int {

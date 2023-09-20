@@ -16,6 +16,16 @@ import (
 	"github.com/kloudlite/container-registry-authorizer/env"
 )
 
+func unauthorized(w http.ResponseWriter) {
+	w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
+	http.Error(w, "Unauthorized", http.StatusUnauthorized)
+}
+
+func authorized(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+
 // ParseAndVerifyToken parses the token and verifies it with the secret key and returns the username, accountname, access and error
 func ParseAndVerifyToken(password string, secretKey string) (userName, accountName, access string, err error) {
 
@@ -50,120 +60,94 @@ func ParseAndVerifyToken(password string, secretKey string) (userName, accountNa
 	return userName, accountName, access, nil
 }
 
-func FiberAuthHandler(c *fiber.Ctx, secretKey string) error {
-	path := c.Query("path", "/")
-	method := c.Method("path", "GET")
+func authorizer(u, p, path, method, secretKey string) error {
 
 	pathArray := strings.Split(path, "/")
+
+	userName, accountName, access, err := ParseAndVerifyToken(p, secretKey)
+	if err != nil {
+		return err
+	}
+
+	if path == "/v2/" && method == "GET" && userName == u {
+		return nil
+	}
+
+	if len(pathArray) <= 3 {
+		return fmt.Errorf("Invalid path: %s", path)
+	}
+
+	if len(pathArray) > 3 {
+		// Define regex pattern
+		pattern := `\/v2\/.*[^\/]\/.*\/(blobs.*|manifests.*)$`
+
+		// Compile the regex pattern
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			log.Println(err)
+		}
+
+		if !re.MatchString(path) {
+			return fmt.Errorf("Invalid path %s", path)
+		}
+	}
+
+	accountname := pathArray[2]
+
+	if (accountName == accountname) && (userName == u) {
+		if method != "GET" {
+			if access == "read_write" {
+				return nil
+			}
+			return fmt.Errorf("Invalid access")
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("Unauthorized Token")
+}
+
+func FiberAuthHandler(c *fiber.Ctx, secretKey string) error {
+	path := c.Query("path", "/")
+	method := c.Query("method", "GET")
 
 	b_auth := basicauth.New(basicauth.Config{
 		Realm: "Forbidden",
 		Authorizer: func(u string, p string) bool {
-			resp := func() bool {
 
-				userName, accountName, access, err := ParseAndVerifyToken(p, secretKey)
-				if err != nil {
-					fmt.Println(err)
-					return false
-				}
-
-				if len(pathArray) <= 1 {
-					return true
-				}
-
-				if path == "/v2/" && method == "GET" && userName == u {
-					return true
-				}
-
-				if len(pathArray) <= 3 {
-					return false
-				}
-
-				if len(pathArray) > 3 {
-					// Define regex pattern
-					pattern := `\/v2\/.*[^\/]\/.*\/(blobs.*|manifests.*)$`
-
-					// Compile the regex pattern
-					re, err := regexp.Compile(pattern)
-					if err != nil {
-						log.Println(err)
-					}
-
-					if !re.MatchString(path) {
-						return false
-					}
-				}
-
-				accountname := pathArray[2]
-
-				if (accountName == accountname) && (userName == u) {
-					if method != "GET" {
-						if access == "read-write" {
-							return true
-						}
-						return false
-					}
-
-					return true
-				}
-
+			if err := authorizer(u, p, path, method, secretKey); err != nil {
+				log.Println(err)
 				return false
-			}()
-
-			if !resp {
-				log.Println(method, ":", resp, u, path)
 			}
-
-			return resp
+			return true
 		},
 	})
 
 	return b_auth(c)
 }
 
-func unauthorized(w http.ResponseWriter) {
-	w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
-	http.Error(w, "Unauthorized", http.StatusUnauthorized)
-}
-
-func authorized(w http.ResponseWriter) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
-}
-
 func HttpAuthHandler(accountname string, secretKey string) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		u, p, ok := r.BasicAuth()
 		if !ok {
 			unauthorized(w)
 			return
 		}
 
-		userName, accountName, access, err := ParseAndVerifyToken(p, "")
-		if err != nil {
-			fmt.Println(err)
+		queryParams := r.URL.Query()
+
+		path := queryParams.Get("path")
+		method := queryParams.Get("method")
+
+		if err := authorizer(u, p, path, method, secretKey); err != nil {
+			log.Println(err)
 			unauthorized(w)
 			return
 		}
 
-		if (accountName == accountname) && (userName == u) {
-			if r.Method != "GET" {
-				if access == "read-write" {
-					authorized(w)
-					return
-				}
-				unauthorized(w)
-				return
-			}
-
-			authorized(w)
-			return
-		}
-
-		unauthorized(w)
+		authorized(w)
 		return
-
 	})
 }
 
