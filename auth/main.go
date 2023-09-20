@@ -26,6 +26,22 @@ func authorized(w http.ResponseWriter) {
 	w.Write([]byte("OK"))
 }
 
+// ParseToken parses the token and returns the username, accountname, access and error
+func ParseToken(password string) (userName, accountName, access string, err error) {
+	tokenString, err := base64.StdEncoding.DecodeString(password)
+	if err != nil {
+		return "", "", "", err
+	}
+	tokenArray := strings.Split(string(tokenString), "::")
+
+	if len(tokenArray) != 6 {
+		return "", "", "", fmt.Errorf("Invalid token")
+	}
+	userName, accountName, access = tokenArray[0], tokenArray[1], tokenArray[2]
+
+	return userName, accountName, access, nil
+}
+
 // ParseAndVerifyToken parses the token and verifies it with the secret key and returns the username, accountname, access and error
 func ParseAndVerifyToken(password string, secretKey string) (userName, accountName, access string, err error) {
 
