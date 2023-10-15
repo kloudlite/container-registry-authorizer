@@ -78,10 +78,6 @@ func ParseAndVerifyToken(password string, secretKey string) (userName, accountNa
 
 func Authorizer(u, p, path, method, secretKey string) error {
 
-	if method == "DELETE" {
-		return fmt.Errorf("Delete method not allowed")
-	}
-
 	pathArray := strings.Split(path, "/")
 
 	userName, accountName, access, err := ParseAndVerifyToken(p, secretKey)
