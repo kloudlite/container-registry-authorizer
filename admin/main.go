@@ -34,6 +34,8 @@ func GetExpirationTime(expiration string) (time.Time, error) {
 	durationType := expiration[length-1]
 
 	switch durationType {
+	case 's':
+		return now.Add(time.Duration(durationVal) * time.Second), nil
 	case 'h':
 		return now.Add(time.Duration(durationVal) * time.Hour), nil
 	case 'd':
